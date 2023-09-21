@@ -115,6 +115,7 @@ class App(customtkinter.CTk):
         # Set default values
         self.map_widget.set_address("Dhaka")
         self.map_option_menu.set("Google normal")
+        self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
         self.appearance_mode_optionemenu.set("Dark")
         
     def add_marker(self, coords=None):
