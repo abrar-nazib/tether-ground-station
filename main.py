@@ -7,6 +7,8 @@ from PIL import Image, ImageTk
 import os
 import requests
 import json
+import time 
+import threading
 
 # Absolute path to the directory containing this file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -30,7 +32,6 @@ class App(customtkinter.CTk):
         self.geometry(str(App.WIDTH) + "x" + str(App.HEIGHT))
         self.minsize(App.WIDTH, App.HEIGHT)
         
-        self.marker_icon = ImageTk.PhotoImage(Image.open(os.path.join(BASE_DIR, "images", "marker.png")).resize((40, 40)))
         
 
         self.marker_list = []
@@ -68,8 +69,8 @@ class App(customtkinter.CTk):
         
         # View Plot button
         self.button_3 = customtkinter.CTkButton(master=self.frame_left,
-                                                text="View Plot",
-                                                command=self.view_plot)
+                                                text="View Heatmap",
+                                                command=self.view_heatmap)
         self.button_3.grid(pady=(20, 0), padx=(20, 20), row=2, column=0)
 
         # Section for selecting map type
@@ -117,7 +118,24 @@ class App(customtkinter.CTk):
         self.map_option_menu.set("Google normal")
         self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=m&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
         self.appearance_mode_optionemenu.set("Dark")
-        
+        self.droneMarker = None        
+
+        # Load marker icons
+        self.marker_icon = ImageTk.PhotoImage(Image.open(os.path.join(BASE_DIR, "images", "marker.png")).resize((40, 40)))
+        self.drone_icon = ImageTk.PhotoImage(Image.open(os.path.join(BASE_DIR, "images", "drone.png")).resize((40, 40)))
+
+
+    def get_drone_position(self):
+        while True:
+            time.sleep(5)
+            # Make a request to the server to get the drone location
+            response = requests.get(f"{SERVER_URL}/drone-control/position")
+            location = json.loads(response.content)
+            if(self.droneMarker != None):
+                self.droneMarker.delete()
+            self.droneMarker = self.map_widget.set_marker(location["lat"], location["lng"], "Drone", icon=self.drone_icon)
+            print(location)
+            
     def add_marker(self, coords=None):
         marker = self.map_widget.set_marker(coords[0], coords[1], f"Point {len(self.marker_list) + 1}", icon=self.marker_icon)
         self.marker_list.append(marker)
@@ -151,9 +169,9 @@ class App(customtkinter.CTk):
         elif new_map == "Google satellite":
             self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
     
-    def view_plot(self):
+    def view_heatmap(self):
         # Make a request to the server to get the signals
-        response = requests.get(f"{SERVER_URL}/signals")
+        response = requests.get(f"{SERVER_URL}/signal-data")
         signals = json.loads(response.content)
         print(signals)
 
@@ -166,4 +184,6 @@ class App(customtkinter.CTk):
 
 if __name__ == "__main__":
     app = App()
+    t = threading.Thread(target=app.get_drone_position)
+    t.start()
     app.start()
