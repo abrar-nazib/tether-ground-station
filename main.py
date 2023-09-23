@@ -3,12 +3,14 @@ ENV = "prod"  # Set to "dev" or "prod" to change the environment
 
 import customtkinter
 from tkintermapview import TkinterMapView
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageDraw
 import os
 import requests
 import json
 import time 
 import threading
+import pandas as pd
+from colour import Color
 
 # Absolute path to the directory containing this file
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,6 +18,68 @@ SERVER_URL = "http://localhost:8080" if ENV == "dev" else "https://tether-s2ng.o
 
 customtkinter.set_default_color_theme("blue")
 
+
+def get_gradient_color(signal_strength):
+    # Define the range of signal strength values
+    min_signal_strength = -80  # Worst signal strength
+    max_signal_strength = -40   # Best signal strength
+
+    # Normalize signal strength to the range [0, 1]
+    normalized_signal = (signal_strength - min_signal_strength) / (max_signal_strength - min_signal_strength)
+
+    # Create a gradient between red and green with 10 steps
+    gradient_colors = list(Color("#FF3333").range_to(Color("green"), 10))
+
+    # Calculate the index in the gradient based on the normalized signal strength
+    color_index = int(normalized_signal * (len(gradient_colors) - 1))
+
+    # Get the color from the gradient
+    selected_color = gradient_colors[color_index]
+
+    # Convert the color to RGB and add transparency
+    red, green, blue = selected_color.rgb
+    return int(red * 255), int(green * 255), int(blue * 255), 128  # 50% transparency
+
+def create_marker_image(signal_strength):
+    # Create a custom marker image using Pillow
+    marker_image = Image.new("RGBA", (32, 32), (0, 0, 0, 0))  # Create a transparent image
+
+    # Create a drawing context
+    marker_draw = ImageDraw.Draw(marker_image)
+
+    # Calculate the circle's position and size
+    circle_center = (16, 16)  # Center of the image
+    circle_radius = 4  # 8px diameter circle, so radius is half of that
+
+    # Get the gradient color based on signal strength
+    circle_color = get_gradient_color(signal_strength)
+
+    # Draw a circle with gradient color
+    marker_draw.ellipse(
+        [circle_center[0] - circle_radius, circle_center[1] - circle_radius,
+         circle_center[0] + circle_radius, circle_center[1] + circle_radius],
+        fill=circle_color
+    )
+
+    # Convert the Pillow image to a PhotoImage for use in tkinter
+    marker_icon = ImageTk.PhotoImage(marker_image)
+    return marker_icon
+
+def load_data():
+    # Load your data
+    # ...
+    df = pd.read_csv('ML/drone_dataset_3.csv')
+    df = df[df['altitude'] == 30]
+    # take random 2000 samples
+    df = df.sample(2000)
+    return df
+
+def put_marker(df, map_widget):
+    # Place markers on the map with gradient colors
+    for row in df.itertuples():
+        marker_lat, marker_lng = row.lat, row.lng
+        marker_icon = create_marker_image(row.signal_strength)
+        map_widget.set_marker(marker_lat, marker_lng, icon=marker_icon)
 
 class App(customtkinter.CTk):
 
@@ -170,10 +234,12 @@ class App(customtkinter.CTk):
             self.map_widget.set_tile_server("https://mt0.google.com/vt/lyrs=s&hl=en&x={x}&y={y}&z={z}&s=Ga", max_zoom=22)
     
     def view_heatmap(self):
-        # Make a request to the server to get the signals
-        response = requests.get(f"{SERVER_URL}/signal-data")
-        signals = json.loads(response.content)
-        print(signals)
+        # # Make a request to the server to get the signals
+        # response = requests.get(f"{SERVER_URL}/signal-data")
+        # signals = json.loads(response.content)
+        # print(signals)
+        df = load_data()
+        put_marker(df, self.map_widget)
 
     def on_closing(self, event=0):
         self.destroy()
